@@ -12,7 +12,7 @@ This tmsh script produces a JSON blob from an existing virtual server configurat
 At the moment, it converts the Virtual Server configuration and pool only.  This means that the newly created application will have a new Virtual server and new Pool but will use pre-existing profiles.  For this reason, it is best to repost the JSON to the same Big-IP to ensure that the referenced objects exist.
 
 
-This can be posted to AS3 on BigIQ or to AS3 on the BigIP itself.
+This can be posted to AS3 on BigIQ or to AS3 on the BigIP itself.  It can also be loaded into Ansible Tower playbook or Jinja2 file.  You can also use it with Postman to create collections and workflows.
 
 
 If you post the exported declaration to the same bigip, you will need to change the Virtual destination IP to avoid a conflict.
@@ -32,19 +32,20 @@ ltm virtual export_me {
         linux-high { }
     }
     pool test-pool
-    profiles {ASM_asm-policy-linux-high-security_policy { }
+    profiles {
+	ASM_asm-policy-linux-high-security_policy { }
         clientssl {
-          context clientside
+		context clientside
         }
         http { }
         serverssl {
-          context serverside
+		context serverside
         }
         tcp-lan-optimized {
-          context serverside
+		context serverside
         }
         tcp-wan-optimized {
-          context clientside
+		context clientside
         }
         websecurity { }
     }
