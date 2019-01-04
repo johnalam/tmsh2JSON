@@ -193,7 +193,7 @@ USAGE:
 
 The script needs the tmsh shell as well as access to the bigip live configuration.  To start using the script, you need to upload file to the /config directory on the Big-IP.
 
-Once uploaded, you can add the script to the running Big-IP configuration like this:
+Once uploaded, you can add the script to the running Big-IP configuration from the bash sehll prompt like this:
 
           tmsh load config file <file_name> merge
 
@@ -202,9 +202,18 @@ Save it to permanent ocnfiguration like this:
           tmsh save sys config
 
  
-run the script with one of these commands:
+run the script from the bash shell prompt with one of these commands:
 
          tmsh run cli script tmpl_export                      # this exports all the virtuals in the config
 
          tmsh run cli script tmpl_export <virtual_name>       # this exports only the virtual specified.
+
+
+If your login diretly into the tmah shell (not bash), you run run the above commands like this:
+          load config file <file_name> merge
+          save sys config
+          run cli script tmpl_export <virtual_name>
+
+If your credentials allow it, you can run a bash shell from inside the tmsh shell by typing: bash
+
 
