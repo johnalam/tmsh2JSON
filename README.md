@@ -18,7 +18,7 @@ If you post the exported declaration to the same bigip, you will need to change 
 
 The script will include a reference to the WAF policy if one is attached to the virtual server properties.
 
-The scrit converts a virtual server configuration such as the following into a decalaration shown below:
+The script converts a virtual server configuration such as the following into a decalaration shown below:
 
 
 ltm virtual export_me {
