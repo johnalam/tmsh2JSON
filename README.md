@@ -3,10 +3,9 @@ Export F5 Big-IP config into a JSON blob suitable for declarative submission to 
 
 tmsh is more than just a CLI.  It is a programmable shell with transaction capabilities.  Great for automation.
 
-
 tmsh scripting specializes in Big-IP configuration handling and manipulation.  It is based on TCL but with F5 pre-loaded libraries.  These libraries give you tools to access and modify configuration objects such as virtuals, pools and profiles.
 
-This tmsh script produces a JSON blob from an existing virtual server configuration.  The JSON blob can then be fed to AS3 to deploy application services and take advantage of analytics.
+This tmsh script produces a JSON blob from an existing virtual server configuration.  The JSON blob can then be fed to AS3 to decalaratively deploy application services and/or add to CI/CD pipeline.
  
 
 At the moment, it converts the Virtual Server configuration and pool only.  This means that the newly created application will have a new Virtual server and new Pool but will use pre-existing profiles.  For this reason, it is best to repost the JSON to the same Big-IP to ensure that the referenced objects exist.
@@ -17,10 +16,9 @@ This can be posted to AS3 on BigIQ or to AS3 on the BigIP itself.  It can also b
 
 If you post the exported declaration to the same bigip, you will need to change the Virtual destination IP to avoid a conflict.
 
-Currently, the script expects a WAF policy
+The script will include a reference to the WAF policy if one is attached to the virtual server properties.
 
-
-It takes something like this:
+The scrit converts a virtual server configuration such as the following into a decalaration shown below:
 
 
 ltm virtual export_me {
@@ -95,7 +93,7 @@ ltm virtual export_me {
 
  
 
-And produces something like this:
+AS3 declaration exported from virtual configuration above:
 
 {
 
@@ -191,27 +189,22 @@ And produces something like this:
 
  
 
-script is attached.
+USAGE:
 
- 
+The script needs the tmsh shell as well as access to the bigip live configuration.  To start using the script, you need to upload file to the /config directory on the Big-IP.
 
-Upload file to the /config directory on the Big-IP.
-
-Install it with these commands:
-
- 
+Once uploaded, you can add the script to the running Big-IP configuration like this:
 
           tmsh load config file <file_name> merge
+
+Save it to permanent ocnfiguration like this:
 
           tmsh save sys config
 
  
+run the script with one of these commands:
 
-run the script with this command:
-
- 
-
-         tmsh run cli script tmpl_export                                   # this exports all the virtuals in the config
+         tmsh run cli script tmpl_export                      # this exports all the virtuals in the config
 
          tmsh run cli script tmpl_export <virtual_name>       # this exports only the virtual specified.
 
