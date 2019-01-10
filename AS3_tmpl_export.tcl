@@ -38,6 +38,7 @@ proc load_pool {pool_name decl} {
     upvar $decl pool_JSON
     set pool [lindex [tmsh::get_config /ltm pool $pool_name all-properties] 0]
     set monitor [string trimright [tmsh::get_field_value $pool monitor]]
+    if { $monitor eq "none" } { set monitor "tcp" }
     set retries [tmsh::get_field_value $pool reselect-tries]
     set lb_method [tmsh::get_field_value $pool load-balancing-mode]
     set action  [tmsh::get_field_value $pool service-down-action]
@@ -78,14 +79,15 @@ proc get_addr_port {s ip prt} {
 }
 
 
-proc get_irule_json {rule} {  
+proc get_irule_json {rule json ptr} {  
     set rule [regsub -all -line {\n}  $rule "\\n"]
 
     regexp {^ltm rule (\S+) \{(.*)\}} $rule p0 rulename irulebody
-#    puts $rule
+    set irulebody [regsub -all -line {\"}  $irulebody {\"} ]
+
 #    puts $irulebody
-    set rule_json ",\n                   \"$rulename\": \{\n\"class\":\"iRule\",\n  \"iRule\":\"$irulebody\",\n\"expand\":\"true\"\}"
-    set rule_pointer ",\n                   \"iRules\": \"$rulename\""
+    set rule_json "$json,\n                   \"$rulename\": \{\n\"class\":\"iRule\",\n  \"iRule\":\"$irulebody\",\n\"expand\": true\}"
+    set rule_pointer "$ptr  \"$rulename\","
     return [list $rule_json $rule_pointer]
 
 }
@@ -113,7 +115,7 @@ set id [clock format $systemTime -format %m-%d-%Y_%H:%M:%S]
 
 
 foreach virt [tmsh::get_config /ltm virtual $virtual_to_export all-properties] {
-  if { [catch {
+  #if \{ \[catch \{
     set virt_name [tmsh::get_name $virt]
     set virt_dest_IP [tmsh::get_field_value $virt "destination"]
     puts "\n[tmsh::get_name $virt]   $virt_dest_IP\n"
@@ -140,30 +142,34 @@ foreach virt [tmsh::get_config /ltm virtual $virtual_to_export all-properties] {
     lappend list_of_changes "PORT_HERE" $port
 
     set irule_json ""
-    set irule_ptr ""
-    set irule [tmsh::get_field_value $virt "rules"]
-    if { $irule ne "none" } {
-        set irule [lindex [tmsh::get_config ltm rule $irule] 0]
-        set i 0
-        foreach item [regexp -all -inline { pool (\S+)} $irule] {
-            if { $i == 1 } {
-                load_pool $item pool_JSON
-                puts $item
-                set i 0
-            } else {
-                set i 1
+    set irule_ptr ",\n                   \"iRules\": \["
+    set rules [tmsh::get_field_value $virt "rules"]
+    if { $rules ne "none" } {
+        foreach irule $rules {
+            set irule [lindex [tmsh::get_config ltm rule $irule] 0]
+            set i 0
+            foreach item [regexp -all -inline { pool (\S+)} $irule] {
+                if { $i == 1 } {
+                    load_pool $item pool_JSON
+                    puts $item
+                    set i 0
+                } else {
+                     set i 1
+                }
             }
-        }
 
-       set irule  [get_irule_json $irule]
-       set irule_ptr  [lindex $irule 1]
-       set irule_json [lindex $irule 0]
+            set irule  [get_irule_json $irule $irule_json $irule_ptr]
+            set irule_ptr  [lindex $irule 1]
+            set irule_json [lindex $irule 0]
 
-
-        #puts $irule_json
+            #puts "\n----\n$irule_json"
+       }
     }
+    set irule_ptr [string trimright $irule_ptr ,]
+    set irule_ptr "$irule_ptr\]"
+
     set wafpol_out ""
- 
+
     foreach virt_profile [tmsh::get_field_value [lindex [tmsh::get_config /ltm virtual $virt_name profiles] 0] profiles] {
 
         if { [catch { set profil_type $profiles([tmsh::get_name $virt_profile]) } ] } {
@@ -220,13 +226,13 @@ foreach virt [tmsh::get_config /ltm virtual $virtual_to_export all-properties] {
         set logpol_out [string map $l $::log_pol]
         set logpol_out ,\n$logpol_out
     }
-
-   puts [string trimright $new_declaration$irule_ptr \}]$wafpol_out$irule_json$logpol_out\}$pool_JSON\n\}\n\}\n\}\n\}
+    set white_spaces "                    "
+   puts [string trimright $new_declaration$irule_ptr \}]$wafpol_out$logpol_out\n$white_spaces\}$irule_json$pool_JSON\n\}\n\}\n\}\n\}
 
     puts "--------------------------------------------------------------------------"
-  }] } {
-      puts "Error with [tmsh::get_name $virt]."
-  }
+ # \} err\] \} \{
+  #    puts "Error with [tmsh::get_name $virt].\n$err"
+  #\}
 
 }
 
