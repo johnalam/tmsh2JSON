@@ -8,7 +8,7 @@ tmsh scripting specializes in Big-IP configuration handling and manipulation.  I
 This tmsh script produces a JSON blob from an existing virtual server configuration.  The JSON blob can then be fed to AS3 to decalaratively deploy application services and/or add to CI/CD pipeline.
  
 
-At the moment, it converts the Virtual Server configuration and pool only.  This means that the newly created application will have a new Virtual server and new Pool but will use pre-existing profiles.  For this reason, it is best to repost the JSON to the same Big-IP to ensure that the referenced objects exist.
+At the moment, it converts the Virtual Server configuration, pool and memners, and iRules.  This means that the newly created application will have a new Virtual server, Pool and iRules but will use pre-existing profiles and WAF policy if one is attached.  For this reason, the referenced profiles and WAF policy need to exist on the Big-IP you target with resulting AS3 decalartion.
 
 
 This can be posted to AS3 on BigIQ or to AS3 on the BigIP itself.  It can also be loaded into Ansible Tower playbook or Jinja2 file.  You can also use it with Postman to create collections and workflows.
