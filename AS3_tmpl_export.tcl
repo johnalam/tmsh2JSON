@@ -115,7 +115,7 @@ set id [clock format $systemTime -format %m-%d-%Y_%H:%M:%S]
 
 foreach virt [tmsh::get_config /ltm virtual $virtual_to_export all-properties] {
   set snatpoolJSON ""
-  #if \{ \[catch \{
+  if { [catch {
     set virt_name [tmsh::get_name $virt]
     set virt_dest_IP [tmsh::get_field_value $virt "destination"]
     puts "\n[tmsh::get_name $virt]   $virt_dest_IP\n"
@@ -265,9 +265,9 @@ foreach virt [tmsh::get_config /ltm virtual $virtual_to_export all-properties] {
   puts [string trimright $new_declaration$cltTLS_JSON$srvTLS_JSON$snat_ptr$irule_ptr \}]$wafpol_out$logpol_out\n$::white_spaces\}$irule_json$snatpoolJSON$pool_JSON\n\}\n\}\n\}\n\}
 
     puts "--------------------------------------------------------------------------"
- # \} err\] \} \{
-  #    puts "Error with [tmsh::get_name $virt].\n$err"
-  #\}
+ } err] } {
+      puts "Error with [tmsh::get_name $virt].\n$err"
+ }
 
 }
 
