@@ -79,14 +79,14 @@ proc get_addr_port {s ip prt} {
 }
 
 
-proc get_irule_json {rule json ptr} {  
+proc get_irule_json {rule json ptr} {
     set rule [regsub -all -line {\n}  $rule "\\n"]
 
     regexp {^ltm rule (\S+) \{(.*)\}} $rule p0 rulename irulebody
     set irulebody [regsub -all -line {\"}  $irulebody {\"} ]
 
 #    puts $irulebody
-    set rule_json "$json,\n                   \"$rulename\": \{\n\"class\":\"iRule\",\n  \"iRule\":\"$irulebody\",\n\"expand\": true\}"
+    set rule_json "$json,\n$::white_spaces\"$rulename\": \{\n$::white_spaces       \"class\":\"iRule\",\n$::white_spaces       \"iRule\":\"$irulebody\",\n$::white_spaces       \"expand\": true\n$::white_spaces\}"
     set rule_pointer "$ptr  \"$rulename\","
     return [list $rule_json $rule_pointer]
 
@@ -113,12 +113,37 @@ set systemTime [clock seconds]
 set id [clock format $systemTime -format %m-%d-%Y_%H:%M:%S]
 
 
-
 foreach virt [tmsh::get_config /ltm virtual $virtual_to_export all-properties] {
+  set snatpoolJSON ""
   #if \{ \[catch \{
     set virt_name [tmsh::get_name $virt]
     set virt_dest_IP [tmsh::get_field_value $virt "destination"]
     puts "\n[tmsh::get_name $virt]   $virt_dest_IP\n"
+
+    set snat_ptr ",\n$::white_spaces\"snat\" : "
+    set snat_type [tmsh::get_field_value $virt "source-address-translation.type"]
+    switch $snat_type {
+        automap {
+            append snat_ptr "\"auto\""
+            set snat_type "auto" }
+        none {
+            append snat_ptr "\"none\""
+             }
+        snat {
+            set snat_pool [tmsh::get_field_value $virt "source-address-translation.pool"]
+            append snat_ptr "\{\"use\": \"$snat_pool\"\}"
+            set snat_type $snat_pool
+            set snat_pool_cfg [lindex [tmsh::get_config /ltm snatpool $snat_pool members] 0]
+            set snat_pool_members [tmsh::get_field_value $snat_pool_cfg "members"]
+            set snatpoolJSON ",\n$::white_spaces     \"snatAddresses\" : \["
+            foreach mbr $snat_pool_members {
+                set snatpoolJSON "$snatpoolJSON \"$mbr\" ,"
+            }
+            set snatpoolJSON "[string trimright $snatpoolJSON ,]\]"
+            set snatpoolJSON ",\n$::white_spaces\"$snat_pool\" : \{\n$::white_spaces     \"class\" : \"SNAT_Pool\"$snatpoolJSON\n$::white_spaces\}"
+            #puts $snatpoolJSON
+        }
+    }
 
     set IP ""
     set port ""
@@ -128,6 +153,8 @@ foreach virt [tmsh::get_config /ltm virtual $virtual_to_export all-properties] {
     set list_of_changes [list "VIRTUAL_NAME_HERE" $virt_name]
     lappend list_of_changes "DESTINATION_IP_HERE" $IP
     lappend list_of_changes "MANAGEMENT_IP_HERE" $mgmt_IP
+    #lappend list_of_changes "SNAT_TYPE_HERE" $snat_type
+
 
     # Add pool name
     set pool_name  "[tmsh::get_field_value $virt pool]"
@@ -169,6 +196,9 @@ foreach virt [tmsh::get_config /ltm virtual $virtual_to_export all-properties] {
     set irule_ptr "$irule_ptr\]"
 
     set wafpol_out ""
+    set cltTLS_JSON ""
+    set srvTLS_JSON ""
+
 
     foreach virt_profile [tmsh::get_field_value [lindex [tmsh::get_config /ltm virtual $virt_name profiles] 0] profiles] {
 
@@ -193,8 +223,14 @@ foreach virt [tmsh::get_config /ltm virtual $virtual_to_export all-properties] {
     #                puts "$feature"
                 }
             }
-            client-ssl { set string "CLIENT_SSL_PROFILE_HERE" }
-            server-ssl { set string "SERVER_SSL_PROFILE_HERE" }
+            client-ssl {
+                set l [list CLIENT_SSL_PROFILE_HERE $profil_name]
+                set cltTLS_JSON ,\n[string map $l $::cltTLS]
+                }
+            server-ssl {
+                set l [list SERVER_SSL_PROFILE_HERE $profil_name]
+                set srvTLS_JSON ,\n[string map $l $::srvTLS]
+                }
             web-security { set string "LTM_POLICY_HERE" }
             default {
                 if { [info exists waf_pol($virt_name)] } {
@@ -226,8 +262,7 @@ foreach virt [tmsh::get_config /ltm virtual $virtual_to_export all-properties] {
         set logpol_out [string map $l $::log_pol]
         set logpol_out ,\n$logpol_out
     }
-    set white_spaces "                    "
-   puts [string trimright $new_declaration$irule_ptr \}]$wafpol_out$logpol_out\n$white_spaces\}$irule_json$pool_JSON\n\}\n\}\n\}\n\}
+  puts [string trimright $new_declaration$cltTLS_JSON$srvTLS_JSON$snat_ptr$irule_ptr \}]$wafpol_out$logpol_out\n$::white_spaces\}$irule_json$snatpoolJSON$pool_JSON\n\}\n\}\n\}\n\}
 
     puts "--------------------------------------------------------------------------"
  # \} err\] \} \{
@@ -244,6 +279,8 @@ tmsh::cd /Common
 
 
 proc script::init {} {
+
+    set ::white_spaces "                    "
 
     set ::declaration {{
     "class": "AS3",
@@ -265,12 +302,6 @@ proc script::init {} {
                     "class": "Service_HTTPS",
                     "remark": "DESCRIPTION_HERE",
                     "virtualPort": PORT_HERE,
-                    "clientTLS": {
-                       "bigip": "SERVER_SSL_PROFILE_HERE"
-                    },
-                    "serverTLS": {
-                       "bigip": "CLIENT_SSL_PROFILE_HERE"
-                    },
                     "virtualAddresses": ["DESTINATION_IP_HERE"],
                     "redirect80": false,
                     "pool":  "POOL_NAME_HERE",
@@ -279,7 +310,7 @@ proc script::init {} {
                                 "ingress": { "bigip": "CLIENTSIDE_TCP_PROFILE_HERE" }
                     },
                     "profileHTTP": { "bigip": "HTTP_PROFILE_HERE" },
-                   "persistenceMethods": [] }}}}}}
+                    "persistenceMethods": [] }}}}}}
 
 
     set ::pool_decl {                     "POOL_NAME_HERE": { "class": "Pool", "monitors": [ "MONITOR_HERE"  ],
@@ -290,7 +321,14 @@ proc script::init {} {
                             "serverAddresses": [ SERVER_ADDRESSES_HERE ] }  ]
                     } }
 
-
+    set ::cltTLS {                     "clientTLS": {
+                       "bigip": "CLIENT_SSL_PROFILE_HERE"
+                    }
+                    }
+    set ::srvTLS {                    "serverTLS": {
+                       "bigip": "SERVER_SSL_PROFILE_HERE"
+                    }
+                    }
 
 
     set ::WAF_pol {                    "policyWAF": {
@@ -306,5 +344,4 @@ proc script::init {} {
 
 
 }
-
 }
