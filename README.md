@@ -210,6 +210,7 @@ run the script from the bash shell prompt with one of these commands:
          tmsh run cli script tmpl_export <IP address>     # this exports only the virtual who's IP address match the one specified.
 
 If you login diretly into the tmah shell (not bash), you run run the above commands like this:
+
           load config file <file_name> merge
           save sys config
           run cli script tmpl_export <keyword or IP address>
