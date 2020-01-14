@@ -22,9 +22,7 @@ The script converts a virtual server configuration such as the following into a 
 
 
 ltm virtual export_me {
-
     description "This is for export.  Export this description."
-
     destination 10.1.30.30:https
 
     ip-protocol tcp
@@ -191,29 +189,28 @@ AS3 declaration exported from virtual configuration above:
 
 USAGE:
 
-The script needs the tmsh shell as well as access to the bigip live configuration.  To start using the script, you need to upload file to the /config directory on the Big-IP.
+The script needs the tmsh shell as well as access to the bigip live configuration.  To start using the script, you need to copy file to the /config directory on the Big-IP.
 
-Once uploaded, you can add the script to the running Big-IP configuration from the bash sehll prompt like this:
+Once copied, you can add the script to the running Big-IP configuration from the bash sehll prompt like this:
 
           tmsh load config file <file_name> merge
 
-Save it to permanent ocnfiguration like this:
+Save it to permanent configuration like this:
 
           tmsh save sys config
 
  
 run the script from the bash shell prompt with one of these commands:
 
-         tmsh run cli script tmpl_export                      # this exports all the virtuals in the config
+         tmsh run cli script tmpl_export                  # this exports all the virtuals in the config
+         tmsh run cli script tmpl_export <keyword>        # this exports only the virtual who's name or description contain the keyword.
+         tmsh run cli script tmpl_export <IP address>     # this exports only the virtual who's IP address match the one specified.
 
-         tmsh run cli script tmpl_export <virtual_name>       # this exports only the virtual specified.
-
-
-If your login diretly into the tmah shell (not bash), you run run the above commands like this:
+If you login diretly into the tmah shell (not bash), you run run the above commands like this:
           load config file <file_name> merge
           save sys config
-          run cli script tmpl_export <virtual_name>
+          run cli script tmpl_export <keyword or IP address>
 
-If your credentials allow it, you can run a bash shell from inside the tmsh shell by typing: bash
+
 
 
