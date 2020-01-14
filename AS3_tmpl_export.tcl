@@ -1,11 +1,8 @@
+
 cli script tmpl_export {
 proc load_profile {p_typ list} {
 
 upvar $list profs
-#tmsh::cd /AS3demo2/DemoApplication
-#foreach partition [tmsh::get_config /sys folder] {
-#    tmsh::cd /$partition
-#    puts "Partition:  $partition"
 
 foreach typ $p_typ {
     foreach profile [tmsh::get_config /ltm profile $typ] {
@@ -79,7 +76,7 @@ proc get_addr_port {s ip prt} {
 }
 
 
-proc get_irule_json {rule json ptr} {
+proc get_irule_json {rule json ptr} {  
     set rule [regsub -all -line {\n}  $rule "\\n"]
 
     regexp {^ltm rule (\S+) \{(.*)\}} $rule p0 rulename irulebody
@@ -102,34 +99,60 @@ load_WAF_pol waf_pol
 
 set AS3_host "BigIP"
 if {$tmsh::argc >0 } {
-    set virtual_to_export [lindex $tmsh::argv 1]
-    puts "Exporting: [lindex $tmsh::argv 1] "
+    set cmd1 [string trimleft [lindex $tmsh::argv 1] '-']
+    switch $cmd1 {
+        k { 
+            set keyword [lindex $tmsh::argv 2]
+            set virtual_to_export ""
+            set application_name "Application1"
+            set tenant_name "Tenant1"
+            puts "Exporting virtuals using keyword $keyword"
+        }
+        default {
+            set virtual_to_export [lindex $tmsh::argv 1]
+            puts "Exporting: [lindex $tmsh::argv 1] "
+        }
+    }
 } else {
     set virtual_to_export ""
 }
+
+set tenant_name "Tenant1"
 
 regexp {(\S+)\/(\S+)}  [tmsh::get_name [lindex [tmsh::get_config /sys management-ip] 0]] foobar mgmt_IP mask
 set systemTime [clock seconds]
 set id [clock format $systemTime -format %m-%d-%Y_%H:%M:%S]
 
+set AS3_class_changes [list "ID_HERE" $id "MANAGEMENT_IP_HERE" $mgmt_IP] 
+
 
 foreach virt [tmsh::get_config /ltm virtual $virtual_to_export all-properties] {
-  set snatpoolJSON ""
-  if { [catch {
+  set snatpoolJSON "" 
+  #if \{ \[catch \{
     set virt_name [tmsh::get_name $virt]
     set virt_dest_IP [tmsh::get_field_value $virt "destination"]
-    puts "\n[tmsh::get_name $virt]   $virt_dest_IP\n"
+    set description [tmsh::get_field_value $virt description]
+
+    set kw_srch $virt_name$virt_dest_IP$description
+    puts "\n[tmsh::get_name $virt]   $virt_dest_IP $description\n"
+
+
+    if { ([info exists keyword] && [string first $keyword $kw_srch]<0) } {
+        puts  "[string first $keyword $kw_srch] $kw_srch $keyword"
+        continue
+    }
+
 
     set snat_ptr ",\n$::white_spaces\"snat\" : "
     set snat_type [tmsh::get_field_value $virt "source-address-translation.type"]
     switch $snat_type {
         automap {
-            append snat_ptr "\"auto\""
-            set snat_type "auto" }
+              append snat_ptr "\"auto\""
+              set snat_type "auto" }
         none {
-            append snat_ptr "\"none\""
+              append snat_ptr "\"none\""
              }
-        snat {
+        snat { 
             set snat_pool [tmsh::get_field_value $virt "source-address-translation.pool"]
             append snat_ptr "\{\"use\": \"$snat_pool\"\}"
             set snat_type $snat_pool
@@ -151,6 +174,8 @@ foreach virt [tmsh::get_config /ltm virtual $virtual_to_export all-properties] {
 
     set partition [tmsh::get_field_value $virt "partition"]
     set list_of_changes [list "VIRTUAL_NAME_HERE" $virt_name]
+    set app_class_changes [list "TENANT_NAME_HERE" $tenant_name]
+
     lappend list_of_changes "DESTINATION_IP_HERE" $IP
     lappend list_of_changes "MANAGEMENT_IP_HERE" $mgmt_IP
     #lappend list_of_changes "SNAT_TYPE_HERE" $snat_type
@@ -201,6 +226,8 @@ foreach virt [tmsh::get_config /ltm virtual $virtual_to_export all-properties] {
 
 
     foreach virt_profile [tmsh::get_field_value [lindex [tmsh::get_config /ltm virtual $virt_name profiles] 0] profiles] {
+        set string ""
+        set profil_type ""
 
         if { [catch { set profil_type $profiles([tmsh::get_name $virt_profile]) } ] } {
             set string ""
@@ -223,16 +250,17 @@ foreach virt [tmsh::get_config /ltm virtual $virtual_to_export all-properties] {
     #                puts "$feature"
                 }
             }
-            client-ssl {
-                set l [list CLIENT_SSL_PROFILE_HERE $profil_name]
+            client-ssl { 
+                set l [list CLIENT_SSL_PROFILE_HERE $profil_name] 
                 set cltTLS_JSON ,\n[string map $l $::cltTLS]
                 }
             server-ssl {
-                set l [list SERVER_SSL_PROFILE_HERE $profil_name]
+                set l [list SERVER_SSL_PROFILE_HERE $profil_name] 
                 set srvTLS_JSON ,\n[string map $l $::srvTLS]
                 }
             web-security { set string "LTM_POLICY_HERE" }
             default {
+                set string "xxx"
                 if { [info exists waf_pol($virt_name)] } {
                      set string "WAF_POLICY_HERE"
                      set profil_name "/Common/$waf_pol($virt_name)"
@@ -253,8 +281,6 @@ foreach virt [tmsh::get_config /ltm virtual $virtual_to_export all-properties] {
 
     set new_declaration [string trimright [string map $list_of_changes $::declaration] \}\}\}\}]
     #puts $new_declaration,$pool_JSON\}\}\}\}
-    puts "--------------------------------------------------------------------------"
-
     set logpol_out  [tmsh::get_field_value $virt security-log-profiles]
     if { $logpol_out ne "" } {
         set logpol_out /Common/[string map {\" ""} $logpol_out]
@@ -262,14 +288,35 @@ foreach virt [tmsh::get_config /ltm virtual $virtual_to_export all-properties] {
         set logpol_out [string map $l $::log_pol]
         set logpol_out ,\n$logpol_out
     }
-  puts [string trimright $new_declaration$cltTLS_JSON$srvTLS_JSON$snat_ptr$irule_ptr \}]$wafpol_out$logpol_out\n$::white_spaces\}$irule_json$snatpoolJSON$pool_JSON\n\}\n\}\n\}\n\}
-
-    puts "--------------------------------------------------------------------------"
- } err] } {
-      puts "Error with [tmsh::get_name $virt].\n$err"
- }
+   if { [info exists keyword]} {
+        set new_declaration [string map $list_of_changes $::service_class]
+        append services_declar $new_declaration\n$cltTLS_JSON$srvTLS_JSON$snat_ptr$irule_ptr \}]$wafpol_out$logpol_out\n$::white_spaces\}$irule_json$snatpoolJSON$pool_JSON\n$::white_spaces\}\n\n
+    } else {
+       puts "--------------------------------------------------------------------------"
+       puts [string trimright $new_declaration$cltTLS_JSON$srvTLS_JSON$snat_ptr$irule_ptr \}]$wafpol_out$logpol_out\n$::white_spaces\}$irule_json$snatpoolJSON$pool_JSON\n\}\n\}\n\}\n\}
+       puts "--------------------------------------------------------------------------"
+    }
+ # \} err\] \} \{
+  #    puts "Error with [tmsh::get_name $virt].\n$err"
+  #\}
 
 }
+
+    if { [info exists keyword]} {
+
+        #lappend $AS3_class_changes $app_class_changes
+        #set ls [list $AS3_class_changes $app_class_changes]
+        set ls "$AS3_class_changes $app_class_changes APPLICATION_NAME_HERE $application_name"
+
+
+        set st  $::AS3_class$::application_class$::tenant_class
+        set new_declar [string map $ls $st]
+
+        puts "--------------------------------------------------------------------------"
+        puts "$new_declar$services_declar\n                 \}\n             \}\n       \}\n\}"
+        puts "--------------------------------------------------------------------------"
+    }
+
 
 tmsh::cd /Common
 
@@ -281,6 +328,53 @@ tmsh::cd /Common
 proc script::init {} {
 
     set ::white_spaces "                    "
+    set ::AS3_class {{
+    "class": "AS3",
+    "action": "deploy",
+    "persist": true,
+    "declaration": {
+        "class": "ADC",
+        "schemaVersion": "3.2.0",
+        "id": "Export_Date:_ID_HERE",
+        "target": {
+           "hostname": "MANAGEMENT_IP_HERE" },
+    }}}
+    set ::AS3_class [string trimright $::AS3_class \}\}]
+
+    set ::tenant_class {
+              "TENANT_NAME_HERE": {
+                  "class": "Tenant",
+                  "defaultRouteDomain": 0,
+
+    }}
+    set ::tenant_class [string trimright $::tenant_class \}]
+
+    set ::application_class {
+            "APPLICATION_NAME_HERE": {
+                "class": "Application",
+                "template": "generic",
+    }}
+    set ::application_class [string trimright $::application_class \}]
+
+
+    set ::service_class {
+                 "VIRTUAL_NAME_HERE": {
+                    "class": "Service_generic",
+                    "remark": "DESCRIPTION_HERE",
+                    "virtualPort": PORT_HERE,
+                    "virtualAddresses": ["DESTINATION_IP_HERE"],
+                    "redirect80": false,
+                    "pool":  "POOL_NAME_HERE",
+                    "profileTCP": {
+                                "egress": "SERVERSIDE_TCP_PROFILE_HERE",
+                                "ingress": { "bigip": "CLIENTSIDE_TCP_PROFILE_HERE" }
+                    },
+                    "profileHTTP": { "bigip": "HTTP_PROFILE_HERE" },
+                    "persistenceMethods": [] }}
+
+
+
+
 
     set ::declaration {{
     "class": "AS3",
@@ -314,12 +408,12 @@ proc script::init {} {
 
 
     set ::pool_decl {                     "POOL_NAME_HERE": { "class": "Pool", "monitors": [ "MONITOR_HERE"  ],
-                "reselectTries": RETRIES_HERE, "loadBalancingMode": "LB_MODE_HERE",
-                "serviceDownAction": "ACTION_DOWN_HERE",
-                    "members": [{
+                        "reselectTries": RETRIES_HERE, "loadBalancingMode": "LB_MODE_HERE",
+                        "serviceDownAction": "ACTION_DOWN_HERE",
+                        "members": [{
                             "servicePort": PORT_HERE,
                             "serverAddresses": [ SERVER_ADDRESSES_HERE ] }  ]
-                    } }
+                        } }
 
     set ::cltTLS {                     "clientTLS": {
                        "bigip": "CLIENT_SSL_PROFILE_HERE"
@@ -344,4 +438,5 @@ proc script::init {} {
 
 
 }
+    
 }
