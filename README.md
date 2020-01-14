@@ -21,8 +21,11 @@ The script will include a reference to the WAF policy if one is attached to the 
 The script converts a virtual server configuration such as the following into a decalaration shown below:
 
 
+
 ltm virtual export_me {
+
     description "This is for export.  Export this description."
+    
     destination 10.1.30.30:https
 
     ip-protocol tcp
@@ -189,7 +192,7 @@ AS3 declaration exported from virtual configuration above:
 
 USAGE:
 
-The script needs the tmsh shell as well as access to the bigip live configuration.  To start using the script, you need to copy file to the /config directory on the Big-IP.
+The script needs the tmsh shell as well as access to the bigip live configuration.  To start using the script, you need to copy the "AS3_tmpl_export.tcl" file to the /config directory on the Big-IP.
 
 Once copied, you can add the script to the running Big-IP configuration from the bash sehll prompt like this:
 
