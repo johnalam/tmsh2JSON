@@ -22,6 +22,7 @@ The script converts a virtual server configuration such as the following into a 
 
 
 
+
 ltm virtual export_me {
 
     description "This is for export.  Export this description."
@@ -94,7 +95,10 @@ ltm virtual export_me {
 
  
 
-AS3 declaration exported from virtual configuration above:
+Below is the exported AS3 declaration from virtual configuration above:
+
+
+
 
 {
 
