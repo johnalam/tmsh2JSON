@@ -85,99 +85,100 @@ You must specify a keyword with the -k switch.
 
 The script converts a virtual server configuration such as the following into a decalaration shown below:
 
-ltm virtual export_me {
-    description "This is for export.  Export this description."
-    destination 10.1.30.30:https
-    ip-protocol tcp
-    mask 255.255.255.255
-    policies {
-        linux-high { }
+
+    ltm virtual export_me {
+        description "This is for export.  Export this description."
+        destination 10.1.30.30:https
+        ip-protocol tcp
+        mask 255.255.255.255
+        policies {
+            linux-high { }
+        }
+        pool test-pool
+        profiles {
+        ASM_asm-policy-linux-high-security_policy { }
+            clientssl {
+            context clientside
+            }
+            http { }
+            serverssl {
+            context serverside
+            }
+
+            tcp-lan-optimized {
+            context serverside
+            }
+
+            tcp-wan-optimized {
+            context clientside
+            }
+
+            websecurity { }
+        }
+        source 0.0.0.0/0
+        source-address-translation {
+            type automap
+        }
+
+        translate-address enabled
+        translate-port enabled
+        vs-index 2
     }
-    pool test-pool
-    profiles {
-	ASM_asm-policy-linux-high-security_policy { }
-        clientssl {
-		context clientside
-        }
-        http { }
-        serverssl {
-		context serverside
-        }
-
-        tcp-lan-optimized {
-		context serverside
-        }
-
-        tcp-wan-optimized {
-		context clientside
-        }
-
-        websecurity { }
-    }
-    source 0.0.0.0/0
-    source-address-translation {
-        type automap
-    }
-
-    translate-address enabled
-    translate-port enabled
-    vs-index 2
-}
 
 
 Below is the exported AS3 declaration from virtual configuration above:
 
 
-{
-  "class": "AS3",
-  "action": "deploy",
-  "persist": true,
-  "declaration": {
-  "class": "ADC",
-  "schemaVersion": "3.2.0",
-  "id": "test",
-  "target": {
-  "hostname": "10.1.1.10" },
+    {
+    "class": "AS3",
+    "action": "deploy",
+    "persist": true,
+    "declaration": {
+    "class": "ADC",
+    "schemaVersion": "3.2.0",
+    "id": "test",
+    "target": {
+    "hostname": "10.1.1.10" },
 
-  "AS3_Exports": {
-  "class": "Tenant",
-  "defaultRouteDomain": 0,
+    "AS3_Exports": {
+    "class": "Tenant",
+    "defaultRouteDomain": 0,
 
-  "export_me": {
-  "class": "Application",
-  "template": "https",
-  "serviceMain": {
-  "class": "Service_HTTPS",
-  "remark": "export_me - This is for export. Export this description. ",
-  "virtualPort": 443,
-  "clientTLS": {
-  "bigip": "/Common/serverssl"
-  },
+    "export_me": {
+    "class": "Application",
+    "template": "https",
+    "serviceMain": {
+    "class": "Service_HTTPS",
+    "remark": "export_me - This is for export. Export this description. ",
+    "virtualPort": 443,
+    "clientTLS": {
+    "bigip": "/Common/serverssl"
+    },
 
-  "virtualAddresses": ["10.1.20.110"],
-  "redirect80": false,
-  "pool": "testpool",
-  "profileTCP": {
-  "egress": "wan",
-  "ingress": { "bigip": "/Common/tcp" } },
-  "profileHTTP": { "bigip": "/Common/custom_http" },
-  "serverTLS": { "bigip": "/Common/clientssl" },
-  "persistenceMethods": [],
-  "policyWAF": {
-  "bigip": "/Common/asm-policy-linux-high-security_policy"
-  },
+    "virtualAddresses": ["10.1.20.110"],
+    "redirect80": false,
+    "pool": "testpool",
+    "profileTCP": {
+    "egress": "wan",
+    "ingress": { "bigip": "/Common/tcp" } },
+    "profileHTTP": { "bigip": "/Common/custom_http" },
+    "serverTLS": { "bigip": "/Common/clientssl" },
+    "persistenceMethods": [],
+    "policyWAF": {
+    "bigip": "/Common/asm-policy-linux-high-security_policy"
+    },
 
-  "securityLogProfiles": [{ "bigip":"/Common/Log all requests"}]
-  }
+    "securityLogProfiles": [{ "bigip":"/Common/Log all requests"}]
+    }
 
-  , "testpool": { "class": "Pool", "monitors": [ "http" ],
-  "reselectTries": 2, "loadBalancingMode": "least-connections-member",
-  "serviceDownAction": "reset",
-  "members": [{
-  "servicePort": 80,
-  "serverAddresses": [ "10.1.10.113","10.1.10.112" ] } ]
+    , "testpool": { "class": "Pool", "monitors": [ "http" ],
+    "reselectTries": 2, "loadBalancingMode": "least-connections-member",
+    "serviceDownAction": "reset",
+    "members": [{
+    "servicePort": 80,
+    "serverAddresses": [ "10.1.10.113","10.1.10.112" ] } ]
 
-  }
+    }
 
-  }}}}
+    }}}}
 
