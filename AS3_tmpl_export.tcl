@@ -1,14 +1,17 @@
-
 cli script tmpl_export {
 proc load_profile {p_typ list} {
 
 upvar $list profs
+#tmsh::cd /AS3demo2/DemoApplication
+#foreach partition [tmsh::get_config /sys folder] {
+#    tmsh::cd /$partition
+#    puts "Partition:  $partition"
 
 foreach typ $p_typ {
     foreach profile [tmsh::get_config /ltm profile $typ] {
         set profile_name [tmsh::get_name $profile]
         set profile_type [string range [tmsh::get_type $profile] 12 end]
-        #puts "--> $profile_name $profile_type"
+        #puts "$profile_name $profile_type"
         set profs($profile_name) $profile_type
     }
 }
@@ -56,8 +59,6 @@ proc load_pool {pool_name decl} {
     return pool_JSON
 }
 
-
-
 proc get_addr_port {s ip prt} {
 
     upvar $ip IP $prt port
@@ -90,41 +91,78 @@ proc get_irule_json {rule json ptr} {
 }
 
 
-
 proc script::run {} {
+
+    if { $tmsh::argc <= 1 } {
+        puts "Usage: run tmpl_export -k keyword -p partition"
+        exit
+    }
+
+    puts "Command line:  $tmsh::argv"
+    regexp -all -nocase {\-p (\w+)} $tmsh::argv var1 partition 
+    regexp -all -nocase {\-k (\w+)} $tmsh::argv var1 keyword
+
+    if {![info exists keyword] } {
+        puts "Must specify keyword."
+        puts "Usage: run tmpl_export -k keyword -p partition"
+        exit
+    }
+
+    if { [info exists partition] &&  $partition ne "" } {
+        puts "$var1 + $partition + $keyword" 
+        declar $partition $keyword
+    } else {
+        foreach {folder} [tmsh::get_config /auth partition] {
+              declar [tmsh::get_name $folder] $keyword
+        }
+    }
+
+}
+
+
+
+proc declar { partition keyword} {
+
+
+puts "Partition: $partition"
+
+tmsh::cd /$partition
 
 
 load_profile {tcp fastl4 client-ssl server-ssl http web-security} profiles
 load_WAF_pol waf_pol
 
 set AS3_host "BigIP"
-if {$tmsh::argc >0 } {
-    set cmd1 [string trimleft [lindex $tmsh::argv 1] '-']
-    switch $cmd1 {
-        k { 
-            set keyword [lindex $tmsh::argv 2]
+#if {$tmsh::argc >0 } {
+#    set cmd1 [string trimleft [lindex $tmsh::argv 1] '-']
+#    switch $cmd1 {
+#        k { 
+    if { $keyword ne "" } {
+            #set keyword [lindex $tmsh::argv 2]
             set virtual_to_export ""
-            set application_name "Application1"
-            set tenant_name "Tenant1"
-            puts "Exporting virtuals using keyword $keyword"
-        }
-        default {
-            set virtual_to_export [lindex $tmsh::argv 1]
-            puts "Exporting: [lindex $tmsh::argv 1] "
-        }
+            set application_name "App_${keyword}"
+            set tenant_name $partition
+    } else {
+        return
     }
-} else {
-    set virtual_to_export ""
-}
+  #          puts "Exporting virtuals using keyword $keyword"
+#        }
+#        default {
+#            set virtual_to_export [lindex $tmsh::argv 1]
+#            puts "Exporting: [lindex $tmsh::argv 1] "
+#        }
+#    }
+#} else {
+#    set virtual_to_export ""
+#}
 
-set tenant_name "Tenant1"
+set tenant_name $partition
 
 regexp {(\S+)\/(\S+)}  [tmsh::get_name [lindex [tmsh::get_config /sys management-ip] 0]] foobar mgmt_IP mask
 set systemTime [clock seconds]
 set id [clock format $systemTime -format %m-%d-%Y_%H:%M:%S]
 
 set AS3_class_changes [list "ID_HERE" $id "MANAGEMENT_IP_HERE" $mgmt_IP] 
-
 
 foreach virt [tmsh::get_config /ltm virtual $virtual_to_export all-properties] {
   set snatpoolJSON "" 
@@ -134,7 +172,7 @@ foreach virt [tmsh::get_config /ltm virtual $virtual_to_export all-properties] {
     set description [tmsh::get_field_value $virt description]
 
     set kw_srch $virt_name$virt_dest_IP$description
-    puts "\n[tmsh::get_name $virt]   $virt_dest_IP $description\n"
+ #   puts "\n[tmsh::get_name $virt]   $virt_dest_IP $description\n"
 
 
     if { ([info exists keyword] && [string first $keyword $kw_srch]<0) } {
@@ -214,13 +252,19 @@ foreach virt [tmsh::get_config /ltm virtual $virtual_to_export all-properties] {
             set irule_ptr  [lindex $irule 1]
             set irule_json [lindex $irule 0]
 
+            set irule_ptr [string trimright $irule_ptr ,]
+            set irule_ptr "$irule_ptr\]"
+
+
             #puts "\n----\n$irule_json"
        }
+    } else {
+           set irule_ptr ""
     }
-    set irule_ptr [string trimright $irule_ptr ,]
-    set irule_ptr "$irule_ptr\]"
 
     set wafpol_out ""
+    set cltTLS_ptr ""
+    set srvTLS_ptr ""
     set cltTLS_JSON ""
     set srvTLS_JSON ""
 
@@ -252,11 +296,37 @@ foreach virt [tmsh::get_config /ltm virtual $virtual_to_export all-properties] {
             }
             client-ssl { 
                 set l [list CLIENT_SSL_PROFILE_HERE $profil_name] 
-                set cltTLS_JSON ,\n[string map $l $::cltTLS]
+                set srvTLS_ptr ,\n[string map $l $::srvTLS]
+                if { $profil_name ne ""} {
+                    set prof [lindex [tmsh::get_config /ltm profile client-ssl $profil_name all-properties] 0]
+                    set l [list CLIENT_SSL_PROFILE_HERE $profil_name]
+                    set cert_chain [lindex [tmsh::get_field_value $prof cert-key-chain] 0]
+                    set cert_name [tmsh::get_field_value $cert_chain cert]
+                    lappend l CERT_NAME_HERE $cert_name
+                    set cert_name [string map {\/ :} $cert_name]
+
+                    set cert_file_name [glob /config/filestore/files_d/Common_d/certificate_d/:Common:${cert_name}_*]
+                    set fileid [open $cert_file_name r]
+                    set cert [read -nonewline $fileid]
+                    lappend l CERT_BODY_HERE [string map {\n \\n} $cert]
+                    unset  cert cert_chain fileid cert_file_name
+
+                    set key_file_name [glob /config/filestore/files_d/Common_d/certificate_key_d/:Common:${cert_name}_*]
+                    set fileid [open $key_file_name r]
+                    set key [read -nonewline $fileid]
+                    lappend l KEY_BODY_HERE [string map {\n \\n} $key] 
+                    unset key fileid key_file_name
+
+
+
+                    lappend l SNI_SETTING_HERE [tmsh::get_field_value $prof sni-require]
+                    lappend l CLIENT_CIPHERS_HERE [tmsh::get_field_value $prof ciphers]
+                    set cltTLS_JSON ,\n[string map $l $::cltTLS_profile_class]
+                }
                 }
             server-ssl {
                 set l [list SERVER_SSL_PROFILE_HERE $profil_name] 
-                set srvTLS_JSON ,\n[string map $l $::srvTLS]
+                set cltTLS_ptr ,\n[string map $l $::cltTLS]
                 }
             web-security { set string "LTM_POLICY_HERE" }
             default {
@@ -282,25 +352,32 @@ foreach virt [tmsh::get_config /ltm virtual $virtual_to_export all-properties] {
     set new_declaration [string trimright [string map $list_of_changes $::declaration] \}\}\}\}]
     #puts $new_declaration,$pool_JSON\}\}\}\}
     set logpol_out  [tmsh::get_field_value $virt security-log-profiles]
-    if { $logpol_out ne "" } {
+    if { $logpol_out ne "" && $logpol_out ne "none"} {
         set logpol_out /Common/[string map {\" ""} $logpol_out]
         set l [list "LOG_POLICY_HERE" $logpol_out]
         set logpol_out [string map $l $::log_pol]
         set logpol_out ,\n$logpol_out
+    } else {
+        set logpol_out ""
     }
    if { [info exists keyword]} {
-        set new_declaration [string map $list_of_changes $::service_class]
-        append services_declar $new_declaration\n$cltTLS_JSON$srvTLS_JSON$snat_ptr$irule_ptr \}]$wafpol_out$logpol_out\n$::white_spaces\}$irule_json$snatpoolJSON$pool_JSON\n$::white_spaces\}\n\n
+        set service_class [string trimright $::service_class \} ]
+        set new_declaration [string map $list_of_changes $service_class]
+        append services_declar $new_declaration\n$cltTLS_ptr$srvTLS_ptr$snat_ptr$irule_ptr $wafpol_out$logpol_out\n$::white_spaces\}$cltTLS_JSON$irule_json$snatpoolJSON$pool_JSON\n$::white_spaces\n,\n
     } else {
-       puts "--------------------------------------------------------------------------"
-       puts [string trimright $new_declaration$cltTLS_JSON$srvTLS_JSON$snat_ptr$irule_ptr \}]$wafpol_out$logpol_out\n$::white_spaces\}$irule_json$snatpoolJSON$pool_JSON\n\}\n\}\n\}\n\}
-       puts "--------------------------------------------------------------------------"
+#       puts "--------------------------------------------------------------------------"
+       puts [string trimright $new_declaration$cltTLS_ptr$srvTLS_ptr$snat_ptr$irule_ptr \}]$wafpol_out$logpol_out\n$::white_spaces\}$irule_json$snatpoolJSON$pool_JSON\n\}\n\}\n\}\n\}
+#       puts "--------------------------------------------------------------------------"
     }
  # \} err\] \} \{
   #    puts "Error with [tmsh::get_name $virt].\n$err"
   #\}
 
+
+
 }
+
+set services_declar [string trimright $services_declar ,\n ]
 
     if { [info exists keyword]} {
 
@@ -309,12 +386,12 @@ foreach virt [tmsh::get_config /ltm virtual $virtual_to_export all-properties] {
         set ls "$AS3_class_changes $app_class_changes APPLICATION_NAME_HERE $application_name"
 
 
-        set st  $::AS3_class$::application_class$::tenant_class
+        set st  $::AS3_class$::tenant_class$::application_class
         set new_declar [string map $ls $st]
 
-        puts "--------------------------------------------------------------------------"
+ #       puts "--------------------------------------------------------------------------"
         puts "$new_declar$services_declar\n                 \}\n             \}\n       \}\n\}"
-        puts "--------------------------------------------------------------------------"
+ #       puts "--------------------------------------------------------------------------"
     }
 
 
@@ -327,6 +404,9 @@ tmsh::cd /Common
 
 proc script::init {} {
 
+    #    "target": {
+    #       "hostname": "MANAGEMENT_IP_HERE" },
+
     set ::white_spaces "                    "
     set ::AS3_class {{
     "class": "AS3",
@@ -335,9 +415,7 @@ proc script::init {} {
     "declaration": {
         "class": "ADC",
         "schemaVersion": "3.2.0",
-        "id": "Export_Date:_ID_HERE",
-        "target": {
-           "hostname": "MANAGEMENT_IP_HERE" },
+        "id": "Export_Date:_ID_HERE"
     }}}
     set ::AS3_class [string trimright $::AS3_class \}\}]
 
@@ -372,7 +450,24 @@ proc script::init {} {
                     "profileHTTP": { "bigip": "HTTP_PROFILE_HERE" },
                     "persistenceMethods": [] }}
 
-
+    set ::cltTLS_profile_class {
+                "CLIENT_SSL_PROFILE_HERE": {
+                   "class": "TLS_Server",
+                   "certificates": [{
+                   "certificate": "CERT_NAME_HERE"
+                }],
+                "requireSNI": SNI_SETTING_HERE,
+                "ciphers": "CLIENT_CIPHERS_HERE",
+                "authenticationMode": "ignore",
+                "authenticationFrequency": "one-time"
+                },
+                "CERT_NAME_HERE": {
+                   "class": "Certificate",
+                   "remark": "Please add passphrase manually",
+                   "certificate": "CERT_BODY_HERE",
+                   "privateKey": "KEY_BODY_HERE"
+                 }
+    }
 
 
 
@@ -383,10 +478,8 @@ proc script::init {} {
     "declaration": {
         "class": "ADC",
         "schemaVersion": "3.2.0",
-        "id": "Export_Date:_ID_HERE",
-        "target": {
-           "hostname": "MANAGEMENT_IP_HERE" },
-        "AS3_Exports": {
+        "id": "Export_Date:_ID_HERE"
+       "AS3_Exports": {
             "class": "Tenant",
             "defaultRouteDomain": 0,
             "VIRTUAL_NAME_HERE": {
@@ -407,8 +500,12 @@ proc script::init {} {
                     "persistenceMethods": [] }}}}}}
 
 
-    set ::pool_decl {                     "POOL_NAME_HERE": { "class": "Pool", "monitors": [ "MONITOR_HERE"  ],
-                        "reselectTries": RETRIES_HERE, "loadBalancingMode": "LB_MODE_HERE",
+    set ::pool_decl {
+                    "POOL_NAME_HERE": { 
+                        "class": "Pool", 
+                        "monitors": [ "MONITOR_HERE"  ],
+                        "reselectTries": RETRIES_HERE, 
+                        "loadBalancingMode": "LB_MODE_HERE",
                         "serviceDownAction": "ACTION_DOWN_HERE",
                         "members": [{
                             "servicePort": PORT_HERE,
@@ -416,11 +513,11 @@ proc script::init {} {
                         } }
 
     set ::cltTLS {                     "clientTLS": {
-                       "bigip": "CLIENT_SSL_PROFILE_HERE"
+                       "bigip": "SERVER_SSL_PROFILE_HERE"
                     }
                     }
     set ::srvTLS {                    "serverTLS": {
-                       "bigip": "SERVER_SSL_PROFILE_HERE"
+                       "bigip": "CLIENT_SSL_PROFILE_HERE"
                     }
                     }
 
@@ -438,5 +535,5 @@ proc script::init {} {
 
 
 }
-    
+    total-signing-status not-all-signed
 }
