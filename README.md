@@ -27,6 +27,7 @@ The script needs the tmsh shell as well as access to the bigip live configuratio
 There are multiple ways to install the script on the Big-IP.
 
 Method 1:
+
     Copy the "AS3_tmpl_export.tcl" file to the /config directory on the Big-IP.
 
     Once copied, you can add the script to the running Big-IP configuration from the bash sehll prompt like this:
@@ -39,20 +40,21 @@ Method 1:
 
 
 Method 2:
+
     Use curl tool as well as the file "AS3_tmpl_export_JSON_for_API_post" as follows:
     curl -sk -u admin:password http://<BigIP hostname>/mgmt/tm/cli/script -H "Content-Type: application/json" -X POST -d "@AS3_export_script_JSON_for_API_post"
 
 
 Method 3:
+
     logon to BigIP CLI and use tmsh to create the script.
-    ssh admin@hostname
-    tmsh #if not already in tmsh shell
-    cli script
-    create tmpl_export
-
-    a vi screen will start, paste the content of AS3_tmpl_export.tcl and save and exit vi.
-
-    then do:  save sys config
+        ssh admin@hostname
+        tmsh #if not already in tmsh shell
+        cli script
+        create tmpl_export
+    A vi screen will start, paste the content of AS3_tmpl_export.tcl and save and exit vi.
+    then do:  
+        save sys config
 
 
 
@@ -82,7 +84,6 @@ You must specify a keyword with the -k switch.
 
 
 The script converts a virtual server configuration such as the following into a decalaration shown below:
-
 
 ltm virtual export_me {
     description "This is for export.  Export this description."
@@ -125,6 +126,7 @@ ltm virtual export_me {
 
 
 Below is the exported AS3 declaration from virtual configuration above:
+
 
 {
   "class": "AS3",
@@ -178,3 +180,4 @@ Below is the exported AS3 declaration from virtual configuration above:
   }
 
   }}}}
+
