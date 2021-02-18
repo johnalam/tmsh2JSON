@@ -1,0 +1,62 @@
+{
+	"info": {
+		"_postman_id": "7d4e77ce-d8d9-478f-b979-94dae6cdeffd",
+		"name": "FAST",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Create HTTPS application",
+			"request": {
+				"auth": {
+					"type": "basic",
+					"basic": [
+						{
+							"key": "password",
+							"value": "admin",
+							"type": "string"
+						},
+						{
+							"key": "username",
+							"value": "admin",
+							"type": "string"
+						},
+						{
+							"key": "showPassword",
+							"value": false,
+							"type": "boolean"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n\"name\": \"bigip-fast-templates/http\",\n\"parameters\": {\n  \"tenant_name\": \"tenant1\",\n  \"app_name\": \"myApp1\",\n  \"virtual_address\": \"10.1.1.1\",\n  \"virtual_port\": 443,\n  \"enable_redirect\": true,\n  \"enable_snat\": true,\n  \"snat_automap\": true,\n  \"enable_persistence\": true,\n  \"persistence_type\": \"cookie\",\n  \"enable_fallback_persistence\": true,\n  \"fallback_persistence_type\": \"source-address\",\n  \"enable_tls_server\": true,\n  \"make_tls_server_profile\": false,\n  \"tls_server_profile_name\": \"/Common/clientssl\",\n  \"enable_tls_client\": true,\n  \"make_tls_client_profile\": false,\n  \"tls_client_profile_name\": \"/Common/serverssl\",\n  \"enable_pool\": true,\n  \"make_pool\": false,\n  \"pool_name\": \"/Common/test-pool\",\n  \"make_http_profile\": false,\n  \"http_profile_name\": \"/Common/http\",\n  \"enable_acceleration\": false,\n  \"enable_compression\": true,\n  \"make_compression_profile\": true,\n  \"enable_multiplex\": true,\n  \"make_multiplex_profile\": false,\n  \"multiplex_profile_name\": \"/Common/oneconnect\",\n  \"common_tcp_profile\": true,\n  \"make_tcp_profile\": false,\n  \"tcp_profile_name\": \"/Common/f5-tcp-progressive\",\n  \"irule_names\": [\n    \"/Common/DG_test\",\n    \"/Common/http_redirect\"\n  ],\n  \"monitor_timeout\": \"NaN\"\n}\n}"
+				},
+				"url": {
+					"raw": "https://{{hostB}}:8443/mgmt/shared/fast/applications",
+					"protocol": "https",
+					"host": [
+						"{{hostB}}"
+					],
+					"port": "8443",
+					"path": [
+						"mgmt",
+						"shared",
+						"fast",
+						"applications"
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"protocolProfileBehavior": {}
+}
